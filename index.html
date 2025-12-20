@@ -18,6 +18,12 @@
         body { font-family: 'Zen Old Mincho', 'Noto Serif JP', serif; }
         .font-sans-custom { font-family: 'Helvetica Neue', Arial, sans-serif; }
         
+        /* 修正点: 固定ヘッダーの被り防止設定を追加 */
+        html { 
+            scroll-behavior: smooth; 
+            scroll-padding-top: 90px; /* ヘッダーの高さ+αの余白を確保 */
+        }
+
         /* Custom Colors & Gradients */
         .text-gold { color: #BF953F; }
         .bg-gold { background-color: #BF953F; }
