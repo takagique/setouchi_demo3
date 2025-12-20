@@ -21,7 +21,7 @@
         /* 修正点: 固定ヘッダーの被り防止設定を追加 */
         html { 
             scroll-behavior: smooth; 
-            scroll-padding-top: 90px; /* ヘッダーの高さ+αの余白を確保 */
+            scroll-padding-top: 100px; /* ヘッダーの高さ+αの余白をさらに確保 */
         }
 
         /* Custom Colors & Gradients */
@@ -102,8 +102,8 @@
             <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-slate-900/40"></div>
         </div>
 
-        <!-- 修正点：mt-10 を mt-24 md:mt-32 に変更して、ヘッダー被りを解消 -->
-        <div class="relative z-10 text-center text-white px-4 max-w-5xl mx-auto mt-24 md:mt-32">
+        <!-- 修正点：mt-24 md:mt-32 を mt-32 md:mt-48 に変更して、さらに位置を下げる -->
+        <div class="relative z-10 text-center text-white px-4 max-w-5xl mx-auto mt-32 md:mt-48">
             <!-- Award Badge -->
             <div class="inline-flex items-center gap-3 border border-amber-400/50 bg-black/60 backdrop-blur px-6 py-3 rounded-full mb-8 animate-float shadow-[0_0_20px_rgba(191,149,63,0.3)]">
                 <i class="fa-solid fa-crown text-amber-400 text-xl"></i>
