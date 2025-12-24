@@ -66,6 +66,14 @@
         .btn-furunavi { background-color: #e60012; color: white; }
 
         .text-shadow { text-shadow: 2px 2px 4px rgba(0,0,0,0.7); }
+
+        /* MicroCMS Modal Styles */
+        .prose h2 { font-size: 1.4rem; font-weight: bold; margin-top: 2em; margin-bottom: 0.8em; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.3em; color: #1e3a8a; }
+        .prose h3 { font-size: 1.2rem; font-weight: bold; margin-top: 1.5em; margin-bottom: 0.5em; color: #1f2937; }
+        .prose p { margin-bottom: 1.2em; line-height: 1.8; color: #374151; }
+        .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1.5em; }
+        .prose a { color: #2563eb; text-decoration: underline; }
+        .prose img { max-width: 100%; height: auto; border-radius: 8px; margin: 1.5em 0; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased overflow-x-hidden">
@@ -90,7 +98,7 @@
     </header>
 
     <!-- Hero Section -->
- <section class="relative h-[500px] md:h-[700px] flex items-center justify-center overflow-hidden bg-slate-900">
+    <section class="relative h-[500px] md:h-[700px] flex items-center justify-center overflow-hidden bg-slate-900">
         <div class="absolute inset-0 z-0">
             <!-- 
                 ★画像差し替えポイント 1
@@ -136,7 +144,8 @@
                     <span class="bg-slate-800 text-white text-xs font-bold px-2 py-1 rounded">NEWS</span>
                     <span class="text-xs text-slate-500 font-sans-custom">在庫・発送情報</span>
                 </div>
-                <div id="news-container" class="flex-1 w-full">
+                <!-- IDを修正: JSと合わせるために id="news-list-container" を付与 -->
+                <div id="news-list-container" class="flex-1 w-full">
                     <p class="text-sm text-slate-600"><i class="fa-solid fa-spinner fa-spin mr-2"></i>読み込み中...</p>
                 </div>
             </div>
@@ -399,8 +408,32 @@
         </div>
     </footer>
 
+    <!-- Modal for News Detail (新規追加) -->
+    <div id="modal" class="fixed inset-0 bg-black/80 hidden z-[9999] flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transform scale-95 transition-transform duration-300" id="modal-content">
+            <div class="p-6 md:p-8">
+                <div class="flex justify-between items-start mb-6 pb-4 border-b border-gray-100">
+                    <div>
+                        <span id="modal-date" class="text-sm text-gray-500 font-mono block mb-1"></span>
+                        <h3 id="modal-title" class="text-xl md:text-2xl font-bold text-gray-900"></h3>
+                    </div>
+                    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition ml-4">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </button>
+                </div>
+                <!-- 本文エリア -->
+                <div id="modal-body" class="prose max-w-none text-gray-700"></div>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 flex justify-end rounded-b-lg">
+                <button onclick="closeModal()" class="bg-slate-800 hover:bg-slate-700 text-white font-medium py-2 px-6 rounded transition">
+                    閉じる
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Logic -->
- <script>
+    <script>
         // =================================================================
         // ▼▼▼ 設定エリア ▼▼▼
         const SERVICE_DOMAIN = "setouchi-news"; 
@@ -409,124 +442,147 @@
         // =================================================================
 
         // DOM要素
-        const listView = document.getElementById('list-view');
-        const detailView = document.getElementById('detail-view');
         const listContainer = document.getElementById('news-list-container');
-        const errorArea = document.getElementById('error-message');
-        const errorText = document.getElementById('error-text');
-
-        // --- ルーティング制御 (ハッシュベース: #articleId) ---
-        function init() {
-            window.addEventListener('hashchange', handleRoute);
-            handleRoute(); // 初回実行
-        }
-
-        function handleRoute() {
-            // URLの #以降を取得（例: #12345 -> 12345）
-            const hash = window.location.hash.substring(1);
-            
-            errorArea.classList.add('hidden'); // エラーリセット
-
-            if (hash) {
-                // 詳細モード
-                listView.classList.add('hidden');
-                detailView.classList.remove('hidden');
-                window.scrollTo(0, 0);
-                fetchDetail(hash);
-            } else {
-                // 一覧モード
-                detailView.classList.add('hidden');
-                listView.classList.remove('hidden');
-                // すでに一覧が描画されていれば再取得しない（ちらつき防止）
-                if (listContainer.childElementCount <= 1) { 
-                    fetchList();
-                }
-            }
-        }
-
+        const modal = document.getElementById('modal');
+        const modalContent = document.getElementById('modal-content');
+        
         // --- 1. 一覧取得 ---
         async function fetchList() {
             try {
                 const response = await fetch(`https://${SERVICE_DOMAIN}.microcms.io/api/v1/${ENDPOINT}`, {
                     headers: { "X-MICROCMS-API-KEY": API_KEY }
                 });
-                if (!response.ok) throw new Error(`一覧取得エラー: ${response.status}`);
+                
+                if (!response.ok) {
+                    // エラーハンドリング
+                    if(response.status === 401) throw new Error("APIキーが正しくありません");
+                    if(response.status === 404) throw new Error("エンドポイントが見つかりません");
+                    throw new Error(`Error: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 renderList(data.contents);
             } catch (error) {
-                showError("お知らせ一覧の読み込みに失敗しました。", error);
+                console.error("News Load Error:", error);
+                listContainer.innerHTML = `<p class="text-sm text-red-500"><i class="fa-solid fa-circle-exclamation mr-1"></i>お知らせの読み込みに失敗しました。</p>`;
             }
         }
 
         function renderList(contents) {
             listContainer.innerHTML = "";
             if (!contents || contents.length === 0) {
-                listContainer.innerHTML = '<p class="text-center text-gray-500 py-8">現在お知らせはありません。</p>';
+                listContainer.innerHTML = '<p class="text-sm text-slate-500">現在お知らせはありません。</p>';
                 return;
             }
+
+            // PCでは横並び、スマホでは縦並びで見やすく調整
+            const ul = document.createElement('ul');
+            ul.className = "flex flex-col gap-2";
 
             contents.forEach(item => {
                 const dateStr = formatDate(item.date || item.publishedAt);
                 const category = parseCategory(item.category);
                 
-                // ★修正点: divではなくaタグに変更。これで確実にクリックできます。
-                const card = document.createElement('a');
-                card.href = `#${item.id}`; // ハッシュリンク
-                card.className = "block bg-white p-5 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition flex flex-col md:flex-row md:items-center gap-4 group no-underline";
-
-                card.innerHTML = `
-                    <div class="flex items-center gap-3 min-w-[140px]">
-                        <span class="text-sm font-mono text-gray-500">${dateStr}</span>
-                        <span class="text-xs font-semibold px-2.5 py-0.5 rounded ${category.color}">${category.name}</span>
-                    </div>
-                    <div class="flex-1">
-                        <h3 class="text-lg font-medium text-gray-800 group-hover:text-blue-600 transition">${item.title}</h3>
-                    </div>
-                    <div class="text-gray-300 group-hover:text-blue-500 transition">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                    </div>
+                const li = document.createElement('li');
+                li.className = "border-b border-slate-100 last:border-0 pb-2 last:pb-0";
+                
+                // モーダルを開くリンク
+                li.innerHTML = `
+                    <button onclick="openModal('${item.id}')" class="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 w-full text-left group hover:bg-slate-50 transition p-2 rounded">
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="text-xs text-slate-400 font-mono">${dateStr}</span>
+                            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${category.color}">${category.name}</span>
+                        </div>
+                        <span class="text-sm text-slate-700 font-medium group-hover:text-sky-600 transition truncate w-full">${item.title}</span>
+                        <i class="fa-solid fa-chevron-right text-xs text-slate-300 md:ml-auto"></i>
+                    </button>
                 `;
-                listContainer.appendChild(card);
+                ul.appendChild(li);
             });
+            
+            listContainer.appendChild(ul);
         }
 
-        // --- 2. 詳細取得 ---
-        async function fetchDetail(id) {
-            // 読み込み中表示をリセット
-            document.getElementById('detail-body').innerHTML = `
-                <div class="animate-pulse space-y-4">
-                    <div class="h-4 skeleton w-full"></div>
-                    <div class="h-4 skeleton w-5/6"></div>
-                    <div class="h-4 skeleton w-4/6"></div>
-                </div>`;
-            document.getElementById('detail-title').textContent = "";
+        // --- 2. モーダル操作 (詳細取得) ---
+        async function openModal(id) {
+            // モーダル表示 (ローディング状態)
+            modal.classList.remove('hidden');
+            // 少し遅れてopacityを変えることでフェードインさせる
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+            }, 10);
             
+            document.body.style.overflow = 'hidden'; // 背景スクロール固定
+            
+            // 中身をローディングに
+            document.getElementById('modal-title').textContent = "読み込み中...";
+            document.getElementById('modal-date').textContent = "";
+            document.getElementById('modal-body').innerHTML = `
+                <div class="animate-pulse space-y-4 py-8">
+                    <div class="h-4 bg-gray-200 rounded w-full"></div>
+                    <div class="h-4 bg-gray-200 rounded w-5/6"></div>
+                    <div class="h-4 bg-gray-200 rounded w-4/6"></div>
+                </div>`;
+
             try {
                 const response = await fetch(`https://${SERVICE_DOMAIN}.microcms.io/api/v1/${ENDPOINT}/${id}`, {
                     headers: { "X-MICROCMS-API-KEY": API_KEY }
                 });
-                if (!response.ok) throw new Error(`詳細取得エラー: ${response.status}`);
-                const data = await response.json();
-                renderDetail(data);
+                if (!response.ok) throw new Error("詳細の取得に失敗しました");
+                
+                const item = await response.json();
+                renderModalContent(item);
+
             } catch (error) {
-                showError("記事の読み込みに失敗しました。", error);
-                document.getElementById('detail-body').innerHTML = '<p class="text-gray-500">記事が見つかりませんでした。</p>';
+                document.getElementById('modal-body').innerHTML = `<p class="text-red-500">記事の取得に失敗しました。</p>`;
             }
         }
 
-        function renderDetail(item) {
+        function renderModalContent(item) {
             const dateStr = formatDate(item.date || item.publishedAt);
             const category = parseCategory(item.category);
 
-            document.getElementById('detail-date').textContent = dateStr;
-            document.getElementById('detail-title').textContent = item.title;
+            document.getElementById('modal-date').textContent = dateStr;
+            document.getElementById('modal-title').textContent = item.title;
             
-            const catEl = document.getElementById('detail-category');
-            catEl.textContent = category.name;
-            catEl.className = `text-xs font-semibold px-2.5 py-0.5 rounded ${category.color}`;
+            // ★修正: 本文のフィールドIDが 'body' 以外の場合（content, textなど）も表示できるように対応
+            // body, content, text, detail, html の順でデータを探します
+            const contentHTML = item.body || item.content || item.text || item.detail || item.html || "";
             
-            document.getElementById('detail-body').innerHTML = item.body || "<p>本文はありません。</p>";
+            if (contentHTML) {
+                document.getElementById('modal-body').innerHTML = contentHTML;
+            } else {
+                // 本文が見つからない場合、デバッグ情報を表示
+                const keys = Object.keys(item).join(', ');
+                document.getElementById('modal-body').innerHTML = `
+                    <div class="bg-yellow-50 p-4 rounded border border-yellow-200 text-sm">
+                        <p class="text-yellow-700 font-bold mb-2"><i class="fa-solid fa-triangle-exclamation"></i> 本文が表示できません</p>
+                        <p class="text-yellow-800 mb-2">MicroCMSのAPI設定で、本文のフィールドIDが <strong>「body」</strong> 以外になっている可能性があります。</p>
+                        <p class="text-slate-600 text-xs bg-white p-2 rounded border border-slate-200">
+                            <strong>取得できたデータ項目名:</strong><br>
+                            ${keys}
+                        </p>
+                        <p class="mt-2 text-slate-500 text-xs">※上記の項目名のいずれかに本文が入っています。コード内の <code>renderModalContent</code> 関数を修正してください。</p>
+                    </div>
+                `;
+            }
         }
+
+        function closeModal() {
+            modal.classList.add('opacity-0');
+            modalContent.classList.add('scale-95');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.body.style.overflow = ''; // スクロール解除
+            }, 300); // transitionと同じ時間待つ
+        }
+
+        // モーダル外クリックで閉じる
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
 
         // --- ユーティリティ関数 ---
         function formatDate(dateString) {
@@ -537,25 +593,21 @@
 
         function parseCategory(catData) {
             let name = "お知らせ";
-            let color = "bg-blue-100 text-blue-700";
+            let color = "bg-slate-100 text-slate-600";
             
             if (catData) {
                 name = Array.isArray(catData) ? catData[0] : (catData.name || catData);
             }
-            if (String(name).includes("重要") || String(name).includes("配送")) {
-                color = "bg-red-100 text-red-600";
-            }
+            // カテゴリ名による色の出し分け
+            if (String(name).includes("重要")) color = "bg-red-100 text-red-600";
+            else if (String(name).includes("発送") || String(name).includes("在庫")) color = "bg-green-100 text-green-700";
+            else if (String(name).includes("メディア")) color = "bg-purple-100 text-purple-700";
+            
             return { name, color };
         }
 
-        function showError(msg, err) {
-            console.error(err);
-            errorText.textContent = msg + (err ? ` (${err.message})` : "");
-            errorArea.classList.remove('hidden');
-        }
-
         // 開始
-        init();
+        fetchList();
 
     </script>
 </body>
